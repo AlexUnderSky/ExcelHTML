@@ -1,0 +1,97 @@
+﻿<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Поиск по ЕНП</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand">
+          <div>
+            <div class="brand-title">Медицинские сведения</div>
+          </div>
+        </div>
+        <button class="secondary-button" type="button" id="logout-button">Выйти</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero hero-compact">
+        <div class="container">
+          <div class="hero-copy compact-copy">
+            <h1>Поиск сведений о прохождении диспансеризации</h1>
+            <p class="lead">
+              Укажите ЕНП, чтобы получить ФИО, дату рождения, организацию, период прохождения и вид обследования.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="results-section">
+        <div class="container">
+          <section class="search-panel search-panel-wide" aria-labelledby="search-title">
+            <div class="panel-header">
+              <div class="panel-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.43 4.42 1.41-1.41-4.42-4.43A6.5 6.5 0 0 0 10.5 4Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 id="search-title">Найти запись</h2>
+                <p>Укажите ЕНП для поиска записи</p>
+              </div>
+            </div>
+
+            <form id="search-form" class="search-form search-form-inline">
+              <label class="field">
+                <span>ЕНП</span>
+                <input
+                  id="enp"
+                  name="enp"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="Введите ЕНП"
+                  required
+                />
+              </label>
+
+              <div class="actions">
+                <button class="primary-button" type="submit" id="search-button">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.43 4.42 1.41-1.41-4.42-4.43A6.5 6.5 0 0 0 10.5 4Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span>Найти</span>
+                </button>
+                <button class="secondary-button" type="button" id="reset-button">Очистить</button>
+              </div>
+            </form>
+          </section>
+
+          <div class="section-heading">
+            <div>
+              <h2>Сведения из реестра</h2>
+            </div>
+            <div id="result-counter" class="result-counter">Записей не найдено</div>
+          </div>
+
+          <div id="status-banner" class="status-banner" aria-live="polite">
+            Введите ЕНП и выполните поиск.
+          </div>
+
+          <div id="results" class="results-grid"></div>
+        </div>
+      </section>
+    </main>
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

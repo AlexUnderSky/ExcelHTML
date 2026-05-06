@@ -1,0 +1,74 @@
+﻿<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Вход в реестр диспансеризации</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand">
+          <div>
+            <div class="brand-title">Медицинские сведения</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <h1>Вход в защищенный реестр</h1>
+            <p class="lead">
+              Для доступа к сведениям о прохождении диспансеризации войдите по логину и паролю.
+            </p>
+          </div>
+
+          <section class="search-panel" aria-labelledby="auth-title">
+            <div class="panel-header">
+              <div class="panel-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 id="auth-title">Вход</h2>
+                <p>Укажите логин и пароль для доступа к системе</p>
+              </div>
+            </div>
+
+            <form id="auth-form" class="search-form auth-form">
+              <label class="field">
+                <span>Логин</span>
+                <input id="login" name="login" type="text" autocomplete="username" required />
+              </label>
+
+              <label class="field">
+                <span>Пароль</span>
+                <input id="password" name="password" type="password" autocomplete="current-password" required />
+              </label>
+
+              <div class="actions auth-actions">
+                <button class="primary-button" type="submit">
+                  <span>Войти</span>
+                </button>
+              </div>
+            </form>
+
+            <div id="auth-banner" class="status-banner auth-banner" aria-live="polite">
+              Введите логин и пароль.
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
