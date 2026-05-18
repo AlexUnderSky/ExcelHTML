@@ -32,9 +32,20 @@ body {
   color: var(--text);
 }
 
+body.protected-page {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 button,
 input {
   font: inherit;
+}
+
+body.protected-page input,
+body.protected-page button {
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 .container {
@@ -444,6 +455,13 @@ h1 {
   border-color: rgba(235, 190, 112, 0.95);
 }
 
+.privacy-note {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .results-grid {
   margin-top: 20px;
   display: grid;
@@ -630,4 +648,14 @@ input:disabled {
 
 .compact-copy h1 {
   max-width: 18ch;
+}
+
+body.is-print-blocked main {
+  display: none;
+}
+
+@media print {
+  body.protected-page main {
+    display: none !important;
+  }
 }

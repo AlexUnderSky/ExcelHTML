@@ -1,8 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import time
@@ -13,15 +14,14 @@ from typing import Any
 
 from fastapi import Cookie, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from openpyxl import load_workbook
+from pydantic import BaseModel
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("DISP_DATA_DIR", BASE_DIR / "data")).resolve()
-AUTH_USERNAME = os.getenv("DISP_AUTH_USERNAME", "admin")
-AUTH_PASSWORD = os.getenv("DISP_AUTH_PASSWORD", "admin")
-SESSION_SECRET = os.getenv("DISP_SESSION_SECRET", "change-me-session-secret")
+USERS_FILE = Path(os.getenv("DISP_USERS_FILE", BASE_DIR / "users.json")).resolve()
+SESSION_SECRET = os.getenv("DISP_SESSION_SECRET", "")
 SESSION_COOKIE_NAME = os.getenv("DISP_SESSION_COOKIE", "disp_session")
 SESSION_TTL_SECONDS = int(os.getenv("DISP_SESSION_TTL", "28800"))
 SESSION_COOKIE_SECURE = os.getenv("DISP_SESSION_SECURE", "true").lower() == "true"
@@ -50,6 +50,13 @@ class CachedTable:
     path: Path
     mtime: float
     rows: list[dict[str, str]]
+
+
+@dataclass
+class CachedUsers:
+    path: Path
+    mtime: float
+    users: dict[str, str]
 
 
 class TableRepository:
@@ -170,10 +177,71 @@ class TableRepository:
         return str(value).strip()
 
 
+class UserRepository:
+    def __init__(self, users_file: Path) -> None:
+        self.users_file = users_file
+        self._cache: CachedUsers | None = None
+        self._lock = Lock()
+
+    def verify_credentials(self, username: str, password: str) -> bool:
+        users = self._load_users()
+        stored_password = users.get(username)
+        if stored_password is None:
+            return False
+        return secrets.compare_digest(password, stored_password)
+
+    def has_user(self, username: str) -> bool:
+        return username in self._load_users()
+
+    def validate_startup(self) -> None:
+        users = self._load_users()
+        if not users:
+            raise RuntimeError(f"Users file {self.users_file} does not contain any valid users.")
+
+    def _load_users(self) -> dict[str, str]:
+        if not self.users_file.exists():
+            raise RuntimeError(f"Users file not found: {self.users_file}")
+
+        stat = self.users_file.stat()
+        with self._lock:
+            if self._cache and self._cache.mtime == stat.st_mtime:
+                return self._cache.users
+
+            users = self._read_users_file()
+            self._cache = CachedUsers(path=self.users_file, mtime=stat.st_mtime, users=users)
+            return users
+
+    def _read_users_file(self) -> dict[str, str]:
+        try:
+            payload = json.loads(self.users_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Users file {self.users_file} contains invalid JSON.") from exc
+
+        raw_users = payload.get("users")
+        if not isinstance(raw_users, list):
+            raise RuntimeError(f"Users file {self.users_file} must contain a 'users' array.")
+
+        users: dict[str, str] = {}
+        for item in raw_users:
+            if not isinstance(item, dict):
+                continue
+
+            username = str(item.get("username", "")).strip()
+            password = str(item.get("password", ""))
+            if username and password:
+                users[username] = password
+
+        return users
+
+
 repository = TableRepository(DATA_DIR)
+user_repository = UserRepository(USERS_FILE)
 app = FastAPI(title="Disp Registry API")
 
 allowed_origins = [origin.strip() for origin in os.getenv("DISP_ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
+if not SESSION_SECRET:
+    raise RuntimeError("Missing required auth setting: DISP_SESSION_SECRET")
+user_repository.validate_startup()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins or ["*"],
@@ -211,7 +279,7 @@ def read_session_token(token: str | None) -> str:
     if not secrets.compare_digest(signature, expected_signature):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Сессия недействительна.")
 
-    if username != AUTH_USERNAME:
+    if not user_repository.has_user(username):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Сессия недействительна.")
 
     if int(expires_at_raw) < int(time.time()):
@@ -242,9 +310,7 @@ def clear_session_cookie(response: Response) -> None:
 
 @app.post("/api/login")
 def login(payload: LoginPayload, response: Response) -> dict[str, str]:
-    username_ok = secrets.compare_digest(payload.username, AUTH_USERNAME)
-    password_ok = secrets.compare_digest(payload.password, AUTH_PASSWORD)
-    if not (username_ok and password_ok):
+    if not user_repository.verify_credentials(payload.username, payload.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль.")
 
     set_session_cookie(response, payload.username)
@@ -260,30 +326,32 @@ def logout(response: Response) -> dict[str, str]:
 
 
 @app.get("/api/session")
-def session(response: Response, _: str = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> dict[str, bool]:
+def session(response: Response, session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> dict[str, bool]:
     response.headers["Cache-Control"] = "no-store"
     try:
-        read_session_token(_)
+        read_session_token(session_token)
         return {"authenticated": True}
     except HTTPException:
         return {"authenticated": False}
 
+
 @app.get("/api/session/check", status_code=204)
-def session_check(_: str = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> Response:
-    require_session(_)
+def session_check(session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> Response:
+    require_session(session_token)
     return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
+
 @app.get("/api/health")
-def health(response: Response, _: str = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> dict[str, str]:
+def health(response: Response, session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> dict[str, str]:
     response.headers["Cache-Control"] = "no-store"
-    require_session(_)
+    require_session(session_token)
     return {"status": "ok"}
 
 
 @app.get("/api/tables")
-def tables(response: Response, _: str = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> list[dict[str, str]]:
+def tables(response: Response, session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> list[dict[str, str]]:
     response.headers["Cache-Control"] = "no-store"
-    require_session(_)
+    require_session(session_token)
     return repository.list_tables()
 
 
@@ -292,12 +360,10 @@ def search(
     response: Response,
     table: str | None = Query(default=None),
     enp: str = Query(..., min_length=1),
-    _: str = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> dict[str, list[dict[str, str]]]:
     response.headers["Cache-Control"] = "no-store"
-    require_session(_)
+    require_session(session_token)
     table_id = table or repository.get_default_table_id()
     items = repository.search_by_enp(table_id, enp)
     return {"items": items}
-
-

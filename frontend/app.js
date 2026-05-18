@@ -15,6 +15,7 @@ const LOGIN_PAGE = "/";
 const SEARCH_PAGE = "/search.html";
 const isLoginPage = Boolean(authForm);
 const isSearchPage = Boolean(form);
+const blockedShortcutKeys = new Set(["a", "c", "p", "s", "u", "x"]);
 
 const kindLabels = {
   "ДВ4": "Диспансеризация взрослого населения, 1 этап",
@@ -166,6 +167,53 @@ const redirectToLogin = () => {
 
 const redirectToSearch = () => {
   window.location.href = SEARCH_PAGE;
+};
+
+const protectSearchPage = () => {
+  if (!isSearchPage) {
+    return;
+  }
+
+  const denyAction = (event) => {
+    const target = event.target;
+    const allowInputAction = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+    if (allowInputAction && (event.type === "copy" || event.type === "cut")) {
+      return;
+    }
+
+    event.preventDefault();
+  };
+
+  document.addEventListener("contextmenu", denyAction);
+  document.addEventListener("copy", denyAction);
+  document.addEventListener("cut", denyAction);
+  document.addEventListener("dragstart", denyAction);
+  document.addEventListener("selectstart", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    event.preventDefault();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    const key = String(event.key || "").toLowerCase();
+    const withModifier = event.ctrlKey || event.metaKey;
+    if (withModifier && blockedShortcutKeys.has(key)) {
+      event.preventDefault();
+    }
+    if (key === "printscreen") {
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener("beforeprint", () => {
+    document.body.classList.add("is-print-blocked");
+  });
+
+  window.addEventListener("afterprint", () => {
+    document.body.classList.remove("is-print-blocked");
+  });
 };
 
 const normalizeServerRecord = (record) => ({
@@ -355,6 +403,7 @@ if (isLoginPage) {
 }
 
 if (isSearchPage) {
+  protectSearchPage();
   setCounter(0);
   setStatus("Проверяю доступ...", "is-warning");
   checkSession().then((authenticated) => {
